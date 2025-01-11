@@ -1,0 +1,282 @@
+---
+title: "HW5-f-kmeans"
+author: "Mahtab and Amin"
+date: "2024-12-04"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+I import the original data to R studio and use it. I did the following:
+# Specify the file and the sheet name or index
+# Read the specific sheet
+# View the data
+
+
+```{r}
+#install.packages("readxl") 
+library(readxl)
+file_path <- "Champo_Carpets_Improving_Business_to_Business_Sales_Using_Machine.xlsx"
+sheet_name <- "Data for Clustering"  # Replace with your sheet name or use sheet index, e.g., 1
+
+data <- read_excel(file_path, sheet = sheet_name)
+
+
+head(data)
+
+str(data)
+```
+#missing values
+I checked for missing values but there were no missing values to delet.
+
+```{r}
+ sum(is.na(data))
+```
+there is no missing value
+
+
+#normalize
+for k-means it is neccessary to normalize the data so that none of the variables dominant the distane similarity.
+I used min-max for that.
+
+```{r}
+library(dplyr)
+myscale <- function(x) {
+(x - min(x)) / (max(x) - min(x))
+}
+Data <- data %>% mutate_if(is.numeric, myscale)
+
+head(Data)
+
+```
+#outlier
+at first, I was trying to remove the outliers from the data but for some coloumns that are related to dummy variables it will delet the only 1 in the whole colomn as the outlier. So I decided not to delet the outliers regarding the dataset nature and commented all codes for it.
+
+```{r}
+#out_lier <- function(x) {
+#  if (is.numeric(x)) {
+#    q1 <- quantile(x, 0.25, na.rm = TRUE)
+#    q3 <- quantile(x, 0.75, na.rm = TRUE)
+#    IQR_val <- q3 - q1
+#    lower <- q1 - 1.5*IQR_val
+#    upper <- q3 + 1.5*IQR_val
+#    return(x < lower | x > upper) # Directly return the logical vector
+#  } else {
+#    return(rep(FALSE, length(x))) # No outliers for non-numeric data
+#  }
+#}
+#
+#
+#data_no_out <- Data %>% 
+#  mutate(across(where(is.numeric), ~ ifelse(out_lier(.), median(., na.rm = TRUE), .)))
+#
+#sum_outliers <- sum(sapply(data_no_out %>% select(where(is.numeric)), function(col) sum(out_lier(col))))
+#
+#sum_outliers
+
+```
+
+```{r}
+
+```
+#making it a data frame and also deleting the labels:
+I converted the data set to a data frame and also deleted first colomn which are the labels for each instance and are not numerical and we can just delet this colomn.
+
+```{r}
+
+df <- as.data.frame(Data)
+dfi <- df[-1]
+any(is.na(dfi))    # Checks for NA
+#any(is.nan(dfi))   # Checks for NaN
+#any(is.infinite(dfi)) # Checks for Inf or -Inf
+str(dfi)
+
+```
+
+
+
+#kmeans models
+at first I just tried to implement the kmeans with 2 clusters but in the following I will find the best number of clusters.
+
+```{r}
+kModel1 <- kmeans(dfi , centers = 2, nstart = 100)
+
+kModel1
+
+```
+
+```{r}
+library(factoextra)
+fviz_cluster(kModel1, dfi)
+
+```
+
+
+#now I try different cluster numbers for visualization.
+
+```{r}
+kModel2 <- kmeans(dfi , centers = 2, nstart = 100)
+kModel3 <- kmeans(dfi , centers = 3, nstart = 100)
+kModel4 <- kmeans(dfi , centers = 4, nstart = 100)
+kModel5 <- kmeans(dfi , centers = 5, nstart = 100)
+
+
+fp2 <- fviz_cluster(kModel2, dfi, geom = "point")
+fp3 <- fviz_cluster(kModel3, dfi, geom = "point")
+fp4 <- fviz_cluster(kModel4, dfi, geom = "point")
+fp5 <- fviz_cluster(kModel5, dfi, geom = "point")
+
+library(gridExtra)
+grid.arrange(fp2, fp3, fp4, fp5, nrow = 2)
+
+```
+#in the following code we can use scree plot and elbow method to find the best K. with WSS
+```{r}
+set.seed(123)
+fviz_nbclust(dfi , kmeans, method = "wss")
+```
+#in the following code we can use Silloutee to find the best K. 
+
+```{r}
+set.seed(123)
+fviz_nbclust(dfi , kmeans, method = "silhouette")
+```
+
+```{r}
+library(cluster)
+avg_sil <- function(k){
+  kModel1 <- kmeans(dfi, centers = k , nstart = 100)
+  ss <- silhouette(kModel1$cluster , dist(dfi))
+  mean(ss[,3])
+}
+
+
+avg_sil(2)
+avg_sil(3)
+avg_sil(4)
+avg_sil(6)
+
+
+```
+#As we can see 2 clusters are the best regarding silhouette
+
+```{r}
+cluster_summary <- df %>%
+  mutate(Cluster = kModel2$cluster) %>%
+  group_by(Cluster) %>%
+  summarise(across(everything(), mean))
+print(cluster_summary)
+
+```
+
+```{r}
+library(GGally)
+ggpairs(dfi, aes(color = factor(kModel2$cluster)))
+
+```
+#the cluster characteristics summarized by the mean values of the variables for each cluster.
+
+Business Insights:
+Cluster 0 (High Volume and Area Customers):
+
+Significantly larger values for total quantities (Sum of QtyRequired) and total area (Sum of TotalArea), indicating that these customers are high-volume buyers.
+A dominant presence in categories like DURRY, HAND TUFTED, and KNOTTED, suggesting a preference for these product types.
+Higher total monetary value (Sum of Amount), making this cluster the key revenue driver.
+Cluster 1 (Low Volume and Area Customers):
+
+Lower values across all metrics, indicating smaller-scale customers.
+Focus on categories such as HANDLOOM and JACQUARD but with significantly lower quantities and areas compared to Cluster 0.
+These customers may need targeted engagement strategies to increase their purchase volume.
+#Recommendations:
+Cluster 0:
+
+Prioritize these customers for premium offerings and bulk discounts.
+Tailor marketing efforts toward their preferred product types (DURRY, HAND TUFTED, KNOTTED).
+
+Cluster 1:
+
+Develop loyalty programs or promotional campaigns to encourage repeat purchases and higher order volumes.
+Offer educational or promotional materials highlighting the benefits of other product categories to expand their buying preferences.
+
+
+
+
+```{r}
+```
+
+
+#part g
+
+#recommender system:
+
+I used cosine similarity to find n nearest neighbors for a target costumer.
+to create a customer-product purchase matrix, I deleted coloumns 2 to 4 and only keep row labels whcih is first column and also the numbers for each product type which are in columns 5 to end.
+ Parameters:
+   purchase_matrix: Customer-product matrix (rows: customers, cols: products, values: purchase counts or binary)
+   target_customer: ID of the target customer (row name in the matrix)
+   top_n_neighbors: Number of nearest neighbors to consider
+
+
+
+```{r}
+
+library(proxy)
+
+fil_recommender <- function(purchase_matrix, target_customer, top_n_neighbors = 3) {
+  
+  rownames(purchase_matrix) <- purchase_matrix$Customer
+  
+#Cosine Similarity
+  similarity_matrix <- as.matrix(simil(purchase_matrix[-1], method = "cosine"))
+  
+  #Exclude Self-Similarity
+  diag(similarity_matrix) <- NA
+  
+  neighbors <- sort(similarity_matrix[target_customer, ], decreasing = TRUE, na.last = TRUE)
+  nearest_neighbors <- head(names(neighbors), top_n_neighbors)
+  
+#Aggregate Product Purchases of Nearest Neighbors
+  neighbors_purchases <- purchase_matrix[nearest_neighbors, -1, drop = FALSE]  # Exclude Customer column
+  aggregated_purchases <- colSums(neighbors_purchases, na.rm = TRUE)
+  
+# Filter Out Products Already Purchased by the target Customer
+  target_customer_purchases <- purchase_matrix[target_customer, -1] 
+  recommendations <- aggregated_purchases[target_customer_purchases == 0]
+  
+  recommendations <- sort(recommendations, decreasing = TRUE)
+  
+  return(recommendations)
+}
+
+
+#to create a customer-product purchase matrix. I deleted coloumns 2 to 4 and only keep row labels whcih is first column and also the numbers for each product type which are in columns 5 to end.
+
+data_rec <- df[, -c(2:4)]
+purchase_matrix <- data.frame(data_rec)
+colnames(purchase_matrix)[1] <- "Customer"  # Rename the first column to "Customer"
+
+recommendations <- fil_recommender(purchase_matrix, target_customer = "A-11", top_n_neighbors = 2)
+
+
+print(recommendations)
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+```
+
+
+
+
+
